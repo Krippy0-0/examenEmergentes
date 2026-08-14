@@ -7,7 +7,10 @@ namespace AIMAR
         [Header("Rotación")]
         [SerializeField] private float rotationSpeed = 35f;
 
-        [Header("Oscilación vertical")]
+        [Header("Oscilación")]
+        [Tooltip("Eje local del vaivén. Con el marcador en una pared, el eje Y " +
+                 "apunta hacia afuera, así que el movimiento vertical va por Z.")]
+        [SerializeField] private Vector3 floatAxis = Vector3.forward;
         [SerializeField, Min(0f)] private float floatAmplitude = 0.025f;
         [SerializeField, Min(0f)] private float floatSpeed = 1.1f;
 
@@ -38,8 +41,8 @@ namespace AIMAR
                 transform.Rotate(Vector3.up, rotationSpeed * Time.deltaTime, Space.Self);
             }
 
-            Vector3 offset = Vector3.zero;
-            offset.y = Mathf.Sin(elapsed * floatSpeed) * floatAmplitude;
+            Vector3 axis = floatAxis.sqrMagnitude > 0.0001f ? floatAxis.normalized : Vector3.forward;
+            Vector3 offset = axis * (Mathf.Sin(elapsed * floatSpeed) * floatAmplitude);
 
             if (orbitRadius > 0f)
             {
@@ -66,7 +69,8 @@ namespace AIMAR
             float verticalSpeed,
             float orbit,
             float orbitalSpeed,
-            float phase)
+            float phase,
+            Vector3 axis)
         {
             rotationSpeed = rotation;
             floatAmplitude = amplitude;
@@ -74,6 +78,7 @@ namespace AIMAR
             orbitRadius = orbit;
             orbitSpeed = orbitalSpeed;
             phaseOffset = phase;
+            floatAxis = axis;
         }
     }
 }

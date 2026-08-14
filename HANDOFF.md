@@ -69,9 +69,35 @@ correctamente. Todo esto está en el commit de la sesión 2.
 ### Escena y objetos
 - `ARCamera` de Vuforia e `ImageTarget_AIMAR` en modo INSTANT.
 - Plataforma compuesta con base y tres rieles.
-- Decorado: tres cajas apiladas, mástil y banderín.
+- Decorado: cajas apoyadas contra la pared, mástil y banderín.
 - **Tres dianas** (`Target_01`, `Target_02`, `Target_03`) con posiciones, escalas y
   parámetros de movimiento distintos.
+
+**La escena está compuesta para una pared, no para una mesa.** El `ImageTarget` tiene la
+imagen en el plano XZ y su eje Y es la normal, así que con el marcador colgado en vertical:
+
+| Eje local | Dirección en la pared |
+|---|---|
+| X | horizontal |
+| Z | vertical, hacia arriba |
+| Y | sale de la pared hacia el jugador |
+
+Por eso las cajas se apilan en Z y el mástil va girado 90° en X. Si al probar la escena
+apareciera invertida en vertical, se corrige con una sola línea: la constante `WallUp` al
+principio del builder, cambiando `Vector3.forward` por `Vector3.back`.
+
+### Fases de la sesión
+`GameManager` gobierna tres fases (`GamePhase`):
+
+1. **Setup** — el campo sigue al marcador. No corre el tiempo, no se puede disparar y
+   `FUEGO` está oculto. Se ve el panel con el botón `COLOCAR`.
+2. **Playing** — al confirmar, `ARContent` se desprende del `ImageTarget` y queda fijo en
+   el mundo: podés bajar la cámara y las dianas siguen en la pared. Arranca el temporizador
+   y aparece `FUEGO`.
+3. **Finished** — tiempo agotado, panel de resultados.
+
+Desde el panel final, `REINICIAR` repite la sesión conservando la colocación y `RECOLOCAR`
+vuelve a enganchar el campo al marcador.
 
 ### Scripts
 | Archivo | Qué hace |
@@ -87,8 +113,9 @@ correctamente. Todo esto está en el commit de la sesión 2.
 - Respuesta al acierto: cambio de color y escala, y reubicación de la diana.
 - HUD con banda de contraste, retícula, puntaje, tiempo, estado e instrucción.
 - Panel final con puntaje, impactos, intentos y **precisión** `hits / shots * 100`.
-- Botón `REINICIAR` conectado a `GameManager.ResetSession()`.
+- Botones `REINICIAR` y `RECOLOCAR` en el panel final.
 - Al llegar el tiempo a cero se bloquean los disparos.
+- Panel de colocación con botón `COLOCAR` antes de empezar.
 
 ### Corrección del profesor, respetada
 El disparo se resuelve **solo** con `Physics.Raycast` y `RaycastHit`. Las dianas tienen

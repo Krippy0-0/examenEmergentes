@@ -26,11 +26,20 @@ namespace AIMAR.Editor
         private const string MarkerPath = Root + "/Images/AIMAR_Marker.png";
         private const int TargetLayer = 8;
 
-        // Área local, relativa al ImageTarget, donde una diana puede reaparecer
-        // tras ser alcanzada. Se mantiene dentro de la plataforma.
-        private static readonly Vector3 RelocationAreaMin = new Vector3(-0.36f, 0.12f, -0.14f);
-        private static readonly Vector3 RelocationAreaMax = new Vector3(0.36f, 0.24f, 0.16f);
-        private const float MinimumRelocationDistance = 0.18f;
+        // El ImageTarget tiene la imagen en el plano XZ y su eje Y es la normal.
+        // Con el marcador colgado en una pared eso significa:
+        //   X local -> horizontal sobre la pared
+        //   Z local -> vertical sobre la pared   (hacia arriba)
+        //   Y local -> sale de la pared hacia el jugador
+        // Toda la escena se compone con esa lectura. Si al probar quedara al
+        // revés en vertical, basta invertir este vector.
+        private static readonly Vector3 WallUp = Vector3.forward;
+
+        // Área local donde una diana puede reaparecer tras ser alcanzada.
+        // X e Z se mueven sobre la pared; Y es cuánto sobresale de ella.
+        private static readonly Vector3 RelocationAreaMin = new Vector3(-0.38f, 0.12f, -0.30f);
+        private static readonly Vector3 RelocationAreaMax = new Vector3(0.38f, 0.22f, 0.30f);
+        private const float MinimumRelocationDistance = 0.20f;
 
         private struct TargetSetup
         {
@@ -50,7 +59,7 @@ namespace AIMAR.Editor
             new TargetSetup
             {
                 Name = "Target_01",
-                LocalPosition = new Vector3(-0.34f, 0.13f, 0.10f),
+                LocalPosition = new Vector3(-0.36f, 0.14f, -0.22f),
                 Scale = 0.85f,
                 RotationSpeed = 30f,
                 FloatAmplitude = 0.022f,
@@ -62,7 +71,7 @@ namespace AIMAR.Editor
             new TargetSetup
             {
                 Name = "Target_02",
-                LocalPosition = new Vector3(0.01f, 0.22f, -0.06f),
+                LocalPosition = new Vector3(0.02f, 0.20f, 0.02f),
                 Scale = 0.70f,
                 RotationSpeed = -45f,
                 FloatAmplitude = 0.035f,
@@ -74,7 +83,7 @@ namespace AIMAR.Editor
             new TargetSetup
             {
                 Name = "Target_03",
-                LocalPosition = new Vector3(0.35f, 0.15f, 0.12f),
+                LocalPosition = new Vector3(0.34f, 0.15f, 0.24f),
                 Scale = 0.78f,
                 RotationSpeed = 60f,
                 FloatAmplitude = 0.018f,
@@ -151,7 +160,7 @@ namespace AIMAR.Editor
                 CreateTargetInstance(prefab, arContent, gameManager, setup);
             }
 
-            HudReferences hud = CreateHud(gameManager, shooter);
+            HudReferences hud = CreateHud(gameManager, shooter, arContent);
             WireTrackingStatus(imageTarget, hud.StatusHud);
 
             Camera arCamera = arCameraObject.GetComponent<Camera>();
@@ -408,34 +417,43 @@ namespace AIMAR.Editor
             Material metal = CreateMaterial(Root + "/Materials/Metal.mat", new Color(0.55f, 0.58f, 0.62f, 1f));
             Material flag = CreateMaterial(Root + "/Materials/Flag.mat", new Color(0.90f, 0.30f, 0.10f, 1f));
 
-            // Pila de cajas en una esquina de la plataforma.
-            CreateBlock(decor, "Caja_01", new Vector3(-0.50f, 0.100f, -0.30f), new Vector3(0.14f, 0.14f, 0.14f), crate);
-            CreateBlock(decor, "Caja_02", new Vector3(-0.50f, 0.220f, -0.30f), new Vector3(0.10f, 0.10f, 0.10f), crate);
-            CreateBlock(decor, "Caja_03", new Vector3(-0.33f, 0.085f, -0.33f), new Vector3(0.11f, 0.11f, 0.11f), crate);
+            // Cajas apoyadas contra la pared: se apilan hacia arriba (Z local) y
+            // sobresalen poco (Y local). Apilarlas en Y las haría crecer hacia
+            // el jugador en vez de hacia arriba.
+            CreateBlock(decor, "Caja_01", new Vector3(-0.46f, 0.075f, -0.34f), new Vector3(0.17f, 0.09f, 0.17f), crate);
+            CreateBlock(decor, "Caja_02", new Vector3(-0.46f, 0.070f, -0.17f), new Vector3(0.15f, 0.08f, 0.15f), crate);
+            CreateBlock(decor, "Caja_03", new Vector3(-0.27f, 0.065f, -0.36f), new Vector3(0.13f, 0.07f, 0.13f), crate);
 
-            // Mástil con banderín en la esquina opuesta.
-            CreateCylinder(decor, "Mastil", new Vector3(0.52f, 0.190f, -0.32f), new Vector3(0.016f, 0.160f, 0.016f), metal);
-            CreateBlock(decor, "Banderin", new Vector3(0.585f, 0.310f, -0.32f), new Vector3(0.115f, 0.065f, 0.008f), flag);
+            // Mástil tumbado sobre la pared: el cilindro nace con su eje en Y,
+            // así que se gira 90° en X para que corra en vertical (Z local).
+            CreateCylinder(decor, "Mastil", new Vector3(0.50f, 0.042f, -0.02f),
+                new Vector3(0.014f, 0.20f, 0.014f), metal, new Vector3(90f, 0f, 0f));
+
+            // Banderín plano contra la pared, junto al extremo alto del mástil.
+            CreateBlock(decor, "Banderin", new Vector3(0.565f, 0.048f, 0.145f),
+                new Vector3(0.12f, 0.010f, 0.075f), flag);
         }
 
-        private static GameObject CreateBlock(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material)
+        private static GameObject CreateBlock(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material, Vector3 localEuler = default)
         {
             GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
             block.name = name;
             block.transform.SetParent(parent, false);
             block.transform.localPosition = localPosition;
+            block.transform.localRotation = Quaternion.Euler(localEuler);
             block.transform.localScale = localScale;
             Object.DestroyImmediate(block.GetComponent<Collider>());
             block.GetComponent<Renderer>().sharedMaterial = material;
             return block;
         }
 
-        private static GameObject CreateCylinder(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material)
+        private static GameObject CreateCylinder(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material, Vector3 localEuler = default)
         {
             GameObject cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             cylinder.name = name;
             cylinder.transform.SetParent(parent, false);
             cylinder.transform.localPosition = localPosition;
+            cylinder.transform.localRotation = Quaternion.Euler(localEuler);
             cylinder.transform.localScale = localScale;
             Object.DestroyImmediate(cylinder.GetComponent<Collider>());
             cylinder.GetComponent<Renderer>().sharedMaterial = material;
@@ -461,7 +479,8 @@ namespace AIMAR.Editor
                 setup.FloatSpeed,
                 setup.OrbitRadius,
                 setup.OrbitSpeed,
-                setup.Phase);
+                setup.Phase,
+                WallUp);
 
             PrefabUtility.RecordPrefabInstancePropertyModifications(target);
             PrefabUtility.RecordPrefabInstancePropertyModifications(floating);
@@ -533,7 +552,7 @@ namespace AIMAR.Editor
             public TrackingStatusHud StatusHud;
         }
 
-        private static HudReferences CreateHud(GameManager gameManager, ShooterController shooter)
+        private static HudReferences CreateHud(GameManager gameManager, ShooterController shooter, Transform arContent)
         {
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
@@ -565,12 +584,22 @@ namespace AIMAR.Editor
 
             CreateCrosshair(canvas.transform);
 
+            GameObject setupPanel = CreateSetupPanel(canvas.transform, font, gameManager);
+
             Button fireButton = CreateFireButton(canvas.transform, font);
             UnityEventTools.AddPersistentListener(fireButton.onClick, shooter.Shoot);
 
             GameObject finalPanel = CreateFinalPanel(canvas.transform, font, gameManager, out Text finalText);
 
-            gameManager.ConfigureHud(score, time, finalPanel, finalText);
+            gameManager.Configure(
+                arContent,
+                score,
+                time,
+                instruction,
+                setupPanel,
+                fireButton.gameObject,
+                finalPanel,
+                finalText);
 
             TrackingStatusHud statusHud = canvasObject.AddComponent<TrackingStatusHud>();
             statusHud.Configure(status);
@@ -579,6 +608,66 @@ namespace AIMAR.Editor
             eventSystem.transform.SetAsLastSibling();
 
             return new HudReferences { StatusHud = statusHud };
+        }
+
+        /// <summary>
+        /// Etapa previa al juego: mientras esté visible, el campo sigue al
+        /// marcador y no se puede disparar ni corre el tiempo. Al confirmar,
+        /// el campo queda fijo en la pared y arranca la sesión.
+        /// </summary>
+        private static GameObject CreateSetupPanel(Transform parent, Font font, GameManager gameManager)
+        {
+            GameObject panel = new GameObject("SetupPanel", typeof(RectTransform));
+            panel.transform.SetParent(parent, false);
+
+            RectTransform rect = panel.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = new Vector2(0f, 60f);
+            rect.sizeDelta = new Vector2(760f, 330f);
+
+            GameObject backing = new GameObject("Backing", typeof(RectTransform), typeof(UIImage));
+            backing.transform.SetParent(panel.transform, false);
+            backing.GetComponent<UIImage>().color = new Color(0f, 0f, 0f, 0.55f);
+            backing.GetComponent<UIImage>().raycastTarget = false;
+            StretchFull(backing.GetComponent<RectTransform>());
+
+            Text hint = CreateText(panel.transform, "SetupHint",
+                "Encuadra el marcador en la pared.\nCuando el campo esté donde querés, confirma.",
+                font, 32, TextAnchor.UpperCenter);
+            RectTransform hintRect = hint.rectTransform;
+            hintRect.anchorMin = new Vector2(0.5f, 1f);
+            hintRect.anchorMax = new Vector2(0.5f, 1f);
+            hintRect.pivot = new Vector2(0.5f, 1f);
+            hintRect.anchoredPosition = new Vector2(0f, -28f);
+            hintRect.sizeDelta = new Vector2(680f, 130f);
+
+            Button confirm = CreateCardButton(panel.transform, font, "ConfirmButton", "COLOCAR",
+                new Color(0.12f, 0.62f, 0.30f, 0.98f), new Vector2(0f, 40f), new Vector2(420f, 140f), 48);
+            UnityEventTools.AddPersistentListener(confirm.onClick, gameManager.ConfirmPlacement);
+
+            panel.SetActive(true);
+            return panel;
+        }
+
+        private static Button CreateCardButton(Transform parent, Font font, string name, string label, Color color, Vector2 anchoredPosition, Vector2 size, int fontSize)
+        {
+            GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(UIImage), typeof(Button));
+            buttonObject.transform.SetParent(parent, false);
+            buttonObject.GetComponent<UIImage>().color = color;
+
+            RectTransform rect = buttonObject.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = anchoredPosition;
+            rect.sizeDelta = size;
+
+            Text text = CreateText(buttonObject.transform, "Label", label, font, fontSize, TextAnchor.MiddleCenter);
+            StretchFull(text.rectTransform);
+
+            return buttonObject.GetComponent<Button>();
         }
 
         private static GameObject CreateFinalPanel(Transform parent, Font font, GameManager gameManager, out Text finalText)
@@ -608,20 +697,16 @@ namespace AIMAR.Editor
             finalRect.anchoredPosition = new Vector2(0f, -60f);
             finalRect.sizeDelta = new Vector2(720f, 340f);
 
-            GameObject restartObject = new GameObject("RestartButton", typeof(RectTransform), typeof(UIImage), typeof(Button));
-            restartObject.transform.SetParent(card.transform, false);
-            restartObject.GetComponent<UIImage>().color = new Color(0.12f, 0.62f, 0.30f, 0.98f);
-            RectTransform restartRect = restartObject.GetComponent<RectTransform>();
-            restartRect.anchorMin = new Vector2(0.5f, 0f);
-            restartRect.anchorMax = new Vector2(0.5f, 0f);
-            restartRect.pivot = new Vector2(0.5f, 0f);
-            restartRect.anchoredPosition = new Vector2(0f, 60f);
-            restartRect.sizeDelta = new Vector2(420f, 140f);
+            // Reiniciar conserva la colocación ya confirmada, para poder
+            // encadenar sesiones sin volver a apuntar el marcador.
+            Button restart = CreateCardButton(card.transform, font, "RestartButton", "REINICIAR",
+                new Color(0.12f, 0.62f, 0.30f, 0.98f), new Vector2(-175f, 60f), new Vector2(320f, 130f), 38);
+            UnityEventTools.AddPersistentListener(restart.onClick, gameManager.ResetSession);
 
-            Text restartLabel = CreateText(restartObject.transform, "Label", "REINICIAR", font, 44, TextAnchor.MiddleCenter);
-            StretchFull(restartLabel.rectTransform);
-
-            UnityEventTools.AddPersistentListener(restartObject.GetComponent<Button>().onClick, gameManager.ResetSession);
+            // Recolocar vuelve a enganchar el campo al marcador.
+            Button replace = CreateCardButton(card.transform, font, "RelocateButton", "RECOLOCAR",
+                new Color(0.20f, 0.36f, 0.55f, 0.98f), new Vector2(175f, 60f), new Vector2(320f, 130f), 38);
+            UnityEventTools.AddPersistentListener(replace.onClick, gameManager.EnterSetup);
 
             panel.SetActive(false);
             return panel;

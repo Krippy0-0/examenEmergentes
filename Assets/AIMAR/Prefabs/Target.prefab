@@ -453,6 +453,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AIMAR.FloatingTarget
   rotationSpeed: 35
+  floatAxis: {x: 0, y: 0, z: 1}
   floatAmplitude: 0.025
   floatSpeed: 1.1
   orbitRadius: 0

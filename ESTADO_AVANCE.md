@@ -128,6 +128,23 @@ porque la rúbrica evalúa que se vea funcionando y eso depende del marcador.
 | 6.6 Tres sesiones consecutivas | ⛔ |
 | 6.7 Ensayo de la secuencia del video | ⛔ |
 
+### Añadidos fuera del plan original
+
+Pedidos después de escribir el plan, ya implementados y compilados:
+
+| Añadido | Estado |
+|---|---|
+| Escena recompuesta para proyectarse sobre una **pared** en vez de una mesa | ✅ |
+| Cajas apiladas en el eje vertical de la pared y mástil tumbado contra ella | ✅ |
+| Eje de oscilación configurable en `FloatingTarget` (vertical de pared, no normal) | ✅ |
+| Etapa de **Setup** previa: colocar el campo y confirmar con `COLOCAR` | ✅ |
+| Al confirmar, el campo se desprende del marcador y queda fijo en el mundo | ✅ |
+| El temporizador y el botón `FUEGO` solo aparecen tras confirmar | ✅ |
+| Botón `RECOLOCAR` para volver a la etapa de colocación | ✅ |
+
+🟡 Falta confirmar en Play hacia qué lado queda el «arriba» de la pared. Si aparece
+invertido, se corrige con la constante `WallUp` del builder.
+
 ### Funciones opcionales
 Partículas, sonido y animación de aparición: ⬜ **no iniciadas a propósito**. La sección 10
 del plan prohíbe empezarlas antes de que el flujo principal esté estable.
