@@ -30,6 +30,12 @@ namespace AIMAR
         public float TimeRemaining { get; private set; }
         public bool IsSessionActive { get; private set; }
 
+        /// <summary>
+        /// Precisión simple en porcentaje. Devuelve 0 sin disparos para no
+        /// dividir por cero al terminar una sesión en la que no se disparó.
+        /// </summary>
+        public float Accuracy => Shots > 0 ? (float)Hits / Shots * 100f : 0f;
+
         private void Start()
         {
             ResetSession();
@@ -114,7 +120,7 @@ namespace AIMAR
             if (finalText != null)
             {
                 finalText.text =
-                    $"SESIÓN TERMINADA\n\nPuntaje: {Score}\nImpactos: {Hits}\nIntentos: {Shots}";
+                    $"SESIÓN TERMINADA\n\nPuntaje: {Score}\nImpactos: {Hits}\nIntentos: {Shots}\nPrecisión: {Accuracy:0.#}%";
             }
 
             if (finalPanel != null)
