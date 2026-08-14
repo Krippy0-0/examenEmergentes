@@ -2,6 +2,8 @@
 
 Documento de traspaso de **Ariel Van Kilsdonk** (sesión 2) a **Mattias Morales** (sesión 3).
 
+Para el seguimiento paso a paso contra la rúbrica y el plan, ver `ESTADO_AVANCE.md`.
+
 ## Entorno fijado
 
 - Unity: `6000.5.1f1` — no actualizar durante la entrega.
