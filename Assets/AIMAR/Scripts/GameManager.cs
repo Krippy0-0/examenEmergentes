@@ -1,0 +1,102 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace AIMAR
+{
+    public sealed class GameManager : MonoBehaviour
+    {
+        [Header("Session")]
+        [SerializeField, Min(1f)] private float sessionDuration = 30f;
+        [SerializeField, Min(1)] private int pointsPerHit = 100;
+
+        [Header("HUD")]
+        [SerializeField] private Text scoreText;
+        [SerializeField] private Text timeText;
+
+        public int Score { get; private set; }
+        public int Shots { get; private set; }
+        public int Hits { get; private set; }
+        public float TimeRemaining { get; private set; }
+        public bool IsSessionActive { get; private set; }
+
+        private void Start()
+        {
+            ResetSession();
+        }
+
+        private void Update()
+        {
+            if (!IsSessionActive)
+            {
+                return;
+            }
+
+            TimeRemaining = Mathf.Max(0f, TimeRemaining - Time.deltaTime);
+            if (TimeRemaining <= 0f)
+            {
+                IsSessionActive = false;
+            }
+
+            RefreshHud();
+        }
+
+        public void ConfigureHud(Text scoreLabel, Text timeLabel)
+        {
+            scoreText = scoreLabel;
+            timeText = timeLabel;
+            RefreshHud();
+        }
+
+        public void ResetSession()
+        {
+            Score = 0;
+            Shots = 0;
+            Hits = 0;
+            TimeRemaining = sessionDuration;
+            IsSessionActive = true;
+            RefreshHud();
+        }
+
+        public bool RegisterShot()
+        {
+            if (!IsSessionActive)
+            {
+                return false;
+            }
+
+            Shots++;
+            return true;
+        }
+
+        public void RegisterHit()
+        {
+            if (!IsSessionActive)
+            {
+                return;
+            }
+
+            Hits++;
+            Score += pointsPerHit;
+            RefreshHud();
+        }
+
+        public void RegisterMiss()
+        {
+            // El intento ya fue contabilizado por RegisterShot.
+            RefreshHud();
+        }
+
+        private void RefreshHud()
+        {
+            if (scoreText != null)
+            {
+                scoreText.text = $"Puntaje: {Score}";
+            }
+
+            if (timeText != null)
+            {
+                timeText.text = $"Tiempo: {Mathf.CeilToInt(TimeRemaining)}";
+            }
+        }
+    }
+}
