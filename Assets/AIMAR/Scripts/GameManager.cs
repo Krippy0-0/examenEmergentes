@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,6 +13,16 @@ namespace AIMAR
         [Header("HUD")]
         [SerializeField] private Text scoreText;
         [SerializeField] private Text timeText;
+
+        [Header("Panel final")]
+        [SerializeField] private GameObject finalPanel;
+        [SerializeField] private Text finalText;
+
+        /// <summary>
+        /// Se dispara al iniciar o reiniciar la sesión. Las dianas se suscriben
+        /// para volver a su posición y apariencia original.
+        /// </summary>
+        public event Action SessionStarted;
 
         public int Score { get; private set; }
         public int Shots { get; private set; }
@@ -35,15 +46,18 @@ namespace AIMAR
             if (TimeRemaining <= 0f)
             {
                 IsSessionActive = false;
+                ShowFinalPanel();
             }
 
             RefreshHud();
         }
 
-        public void ConfigureHud(Text scoreLabel, Text timeLabel)
+        public void ConfigureHud(Text scoreLabel, Text timeLabel, GameObject panel, Text panelLabel)
         {
             scoreText = scoreLabel;
             timeText = timeLabel;
+            finalPanel = panel;
+            finalText = panelLabel;
             RefreshHud();
         }
 
@@ -54,6 +68,13 @@ namespace AIMAR
             Hits = 0;
             TimeRemaining = sessionDuration;
             IsSessionActive = true;
+
+            if (finalPanel != null)
+            {
+                finalPanel.SetActive(false);
+            }
+
+            SessionStarted?.Invoke();
             RefreshHud();
         }
 
@@ -84,6 +105,22 @@ namespace AIMAR
         {
             // El intento ya fue contabilizado por RegisterShot.
             RefreshHud();
+        }
+
+        private void ShowFinalPanel()
+        {
+            RefreshHud();
+
+            if (finalText != null)
+            {
+                finalText.text =
+                    $"SESIÓN TERMINADA\n\nPuntaje: {Score}\nImpactos: {Hits}\nIntentos: {Shots}";
+            }
+
+            if (finalPanel != null)
+            {
+                finalPanel.SetActive(true);
+            }
         }
 
         private void RefreshHud()

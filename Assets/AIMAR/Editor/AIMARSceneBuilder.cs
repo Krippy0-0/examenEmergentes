@@ -1,11 +1,13 @@
 #if UNITY_EDITOR
 using System;
 using System.IO;
+using System.Reflection;
 using AIMAR;
 using UnityEditor;
 using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
@@ -23,6 +25,65 @@ namespace AIMAR.Editor
         private const string PrefabPath = Root + "/Prefabs/Target.prefab";
         private const string MarkerPath = Root + "/Images/AIMAR_Marker.png";
         private const int TargetLayer = 8;
+
+        // Área local, relativa al ImageTarget, donde una diana puede reaparecer
+        // tras ser alcanzada. Se mantiene dentro de la plataforma.
+        private static readonly Vector3 RelocationAreaMin = new Vector3(-0.36f, 0.12f, -0.14f);
+        private static readonly Vector3 RelocationAreaMax = new Vector3(0.36f, 0.24f, 0.16f);
+        private const float MinimumRelocationDistance = 0.18f;
+
+        private struct TargetSetup
+        {
+            public string Name;
+            public Vector3 LocalPosition;
+            public float Scale;
+            public float RotationSpeed;
+            public float FloatAmplitude;
+            public float FloatSpeed;
+            public float OrbitRadius;
+            public float OrbitSpeed;
+            public float Phase;
+        }
+
+        private static readonly TargetSetup[] Targets =
+        {
+            new TargetSetup
+            {
+                Name = "Target_01",
+                LocalPosition = new Vector3(-0.34f, 0.13f, 0.10f),
+                Scale = 0.85f,
+                RotationSpeed = 30f,
+                FloatAmplitude = 0.022f,
+                FloatSpeed = 1.0f,
+                OrbitRadius = 0f,
+                OrbitSpeed = 0f,
+                Phase = 0f
+            },
+            new TargetSetup
+            {
+                Name = "Target_02",
+                LocalPosition = new Vector3(0.01f, 0.22f, -0.06f),
+                Scale = 0.70f,
+                RotationSpeed = -45f,
+                FloatAmplitude = 0.035f,
+                FloatSpeed = 1.45f,
+                OrbitRadius = 0.045f,
+                OrbitSpeed = 0.9f,
+                Phase = 1.6f
+            },
+            new TargetSetup
+            {
+                Name = "Target_03",
+                LocalPosition = new Vector3(0.35f, 0.15f, 0.12f),
+                Scale = 0.78f,
+                RotationSpeed = 60f,
+                FloatAmplitude = 0.018f,
+                FloatSpeed = 0.8f,
+                OrbitRadius = 0.030f,
+                OrbitSpeed = 1.3f,
+                Phase = 3.1f
+            }
+        };
 
         [InitializeOnLoadMethod]
         private static void CompletePendingPrototypeAfterReload()
@@ -66,7 +127,7 @@ namespace AIMAR.Editor
             EnsureFolders();
             EnsureTargetLayer();
 
-            Scene scene = System.IO.File.Exists(ScenePath)
+            Scene scene = File.Exists(ScenePath)
                 ? EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single)
                 : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -82,15 +143,22 @@ namespace AIMAR.Editor
             arContent.SetParent(imageTarget.transform, false);
 
             CreatePlatform(arContent);
-            Target target = CreateTargetInstance(arContent, gameManager);
-            CreateHud(gameManager, shooter);
+            CreateDecor(arContent);
+
+            GameObject prefab = CreateTargetPrefab();
+            foreach (TargetSetup setup in Targets)
+            {
+                CreateTargetInstance(prefab, arContent, gameManager, setup);
+            }
+
+            HudReferences hud = CreateHud(gameManager, shooter);
+            WireTrackingStatus(imageTarget, hud.StatusHud);
 
             Camera arCamera = arCameraObject.GetComponent<Camera>();
             shooter.Configure(arCamera, gameManager, 1 << TargetLayer);
 
             EditorUtility.SetDirty(gameManager);
             EditorUtility.SetDirty(shooter);
-            EditorUtility.SetDirty(target);
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -105,9 +173,9 @@ namespace AIMAR.Editor
             {
                 EditorUtility.DisplayDialog(
                     "Prototipo AIM-AR creado",
-                    "Entrenamiento.unity ya contiene ARCamera, ImageTarget, ARContent, plataforma, diana, raycast y HUD.\n\n" +
-                    "Paso manual obligatorio: en el ImageTarget seleccionado asigna la base de datos y el marcador. " +
-                    "Luego agrega la licencia de Vuforia y prueba con Play.",
+                    "Entrenamiento.unity contiene ARCamera, ImageTarget, plataforma, decorado, tres dianas con " +
+                    "movimiento, raycast, HUD, panel final y botón Reiniciar.\n\n" +
+                    "Verifica en la configuración de Vuforia que la licencia esté asignada y prueba con Play.",
                     "Entendido");
             }
         }
@@ -319,37 +387,100 @@ namespace AIMAR.Editor
 
         private static void CreatePlatform(Transform parent)
         {
-            GameObject platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            platform.name = "Plataforma";
-            platform.transform.SetParent(parent, false);
-            platform.transform.localPosition = new Vector3(0f, 0.015f, 0f);
-            platform.transform.localScale = new Vector3(1.2f, 0.03f, 0.85f);
-            platform.GetComponent<Renderer>().sharedMaterial = CreateMaterial(
-                Root + "/Materials/Platform.mat",
-                new Color(0.08f, 0.22f, 0.34f, 1f));
+            Transform platform = new GameObject("Plataforma").transform;
+            platform.SetParent(parent, false);
+
+            Material deck = CreateMaterial(Root + "/Materials/Platform.mat", new Color(0.08f, 0.22f, 0.34f, 1f));
+            Material rail = CreateMaterial(Root + "/Materials/PlatformRail.mat", new Color(0.85f, 0.62f, 0.12f, 1f));
+
+            CreateBlock(platform, "Base", new Vector3(0f, 0.015f, 0f), new Vector3(1.30f, 0.03f, 0.90f), deck);
+            CreateBlock(platform, "Riel_Fondo", new Vector3(0f, 0.055f, -0.425f), new Vector3(1.30f, 0.05f, 0.05f), rail);
+            CreateBlock(platform, "Riel_Izquierdo", new Vector3(-0.625f, 0.055f, 0f), new Vector3(0.05f, 0.05f, 0.90f), rail);
+            CreateBlock(platform, "Riel_Derecho", new Vector3(0.625f, 0.055f, 0f), new Vector3(0.05f, 0.05f, 0.90f), rail);
         }
 
-        private static Target CreateTargetInstance(Transform parent, GameManager gameManager)
+        private static void CreateDecor(Transform parent)
         {
-            GameObject prefab = CreateTargetPrefab();
+            Transform decor = new GameObject("Decorado").transform;
+            decor.SetParent(parent, false);
+
+            Material crate = CreateMaterial(Root + "/Materials/Crate.mat", new Color(0.45f, 0.30f, 0.16f, 1f));
+            Material metal = CreateMaterial(Root + "/Materials/Metal.mat", new Color(0.55f, 0.58f, 0.62f, 1f));
+            Material flag = CreateMaterial(Root + "/Materials/Flag.mat", new Color(0.90f, 0.30f, 0.10f, 1f));
+
+            // Pila de cajas en una esquina de la plataforma.
+            CreateBlock(decor, "Caja_01", new Vector3(-0.50f, 0.100f, -0.30f), new Vector3(0.14f, 0.14f, 0.14f), crate);
+            CreateBlock(decor, "Caja_02", new Vector3(-0.50f, 0.220f, -0.30f), new Vector3(0.10f, 0.10f, 0.10f), crate);
+            CreateBlock(decor, "Caja_03", new Vector3(-0.33f, 0.085f, -0.33f), new Vector3(0.11f, 0.11f, 0.11f), crate);
+
+            // Mástil con banderín en la esquina opuesta.
+            CreateCylinder(decor, "Mastil", new Vector3(0.52f, 0.190f, -0.32f), new Vector3(0.016f, 0.160f, 0.016f), metal);
+            CreateBlock(decor, "Banderin", new Vector3(0.585f, 0.310f, -0.32f), new Vector3(0.115f, 0.065f, 0.008f), flag);
+        }
+
+        private static GameObject CreateBlock(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material)
+        {
+            GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            block.name = name;
+            block.transform.SetParent(parent, false);
+            block.transform.localPosition = localPosition;
+            block.transform.localScale = localScale;
+            Object.DestroyImmediate(block.GetComponent<Collider>());
+            block.GetComponent<Renderer>().sharedMaterial = material;
+            return block;
+        }
+
+        private static GameObject CreateCylinder(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material)
+        {
+            GameObject cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            cylinder.name = name;
+            cylinder.transform.SetParent(parent, false);
+            cylinder.transform.localPosition = localPosition;
+            cylinder.transform.localScale = localScale;
+            Object.DestroyImmediate(cylinder.GetComponent<Collider>());
+            cylinder.GetComponent<Renderer>().sharedMaterial = material;
+            return cylinder;
+        }
+
+        private static void CreateTargetInstance(GameObject prefab, Transform parent, GameManager gameManager, TargetSetup setup)
+        {
             GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
-            instance.name = "Target_01";
-            instance.transform.localPosition = new Vector3(0f, 0.16f, 0f);
+            instance.name = setup.Name;
+            instance.transform.localPosition = setup.LocalPosition;
             instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one * setup.Scale;
 
             Target target = instance.GetComponent<Target>();
             target.Configure(gameManager);
-            return target;
+            target.ConfigureRelocation(RelocationAreaMin, RelocationAreaMax, MinimumRelocationDistance);
+
+            FloatingTarget floating = instance.GetComponent<FloatingTarget>();
+            floating.Configure(
+                setup.RotationSpeed,
+                setup.FloatAmplitude,
+                setup.FloatSpeed,
+                setup.OrbitRadius,
+                setup.OrbitSpeed,
+                setup.Phase);
+
+            PrefabUtility.RecordPrefabInstancePropertyModifications(target);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(floating);
+            EditorUtility.SetDirty(target);
+            EditorUtility.SetDirty(floating);
         }
 
         private static GameObject CreateTargetPrefab()
         {
             GameObject root = new GameObject("Target");
             root.layer = TargetLayer;
+
+            // El collider cubre los discos y la aguja indicadora, sin sobresalir.
             BoxCollider collider = root.AddComponent<BoxCollider>();
-            collider.center = new Vector3(0f, 0.025f, 0f);
-            collider.size = new Vector3(0.48f, 0.08f, 0.48f);
+            collider.center = new Vector3(0f, 0.048f, 0f);
+            collider.size = new Vector3(0.48f, 0.146f, 0.48f);
+
             root.AddComponent<Target>();
+            root.AddComponent<FloatingTarget>();
 
             CreateTargetDisc(root.transform, "Outer_Red", 0.48f, 0f,
                 CreateMaterial(Root + "/Materials/TargetRed.mat", new Color(0.84f, 0.1f, 0.07f, 1f)));
@@ -357,6 +488,13 @@ namespace AIMAR.Editor
                 CreateMaterial(Root + "/Materials/TargetWhite.mat", new Color(0.95f, 0.95f, 0.92f, 1f)));
             CreateTargetDisc(root.transform, "Center_Red", 0.15f, 0.07f,
                 CreateMaterial(Root + "/Materials/TargetCenter.mat", new Color(0.72f, 0.04f, 0.03f, 1f)));
+
+            // Marca descentrada: hace visible la rotación, que en discos
+            // concéntricos sería imperceptible.
+            GameObject indicator = CreateBlock(root.transform, "Indicador",
+                new Vector3(0.18f, 0.095f, 0f), new Vector3(0.05f, 0.05f, 0.05f),
+                CreateMaterial(Root + "/Materials/TargetIndicator.mat", new Color(0.98f, 0.80f, 0.15f, 1f)));
+            indicator.layer = TargetLayer;
 
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
             Object.DestroyImmediate(root);
@@ -390,7 +528,12 @@ namespace AIMAR.Editor
             return material;
         }
 
-        private static void CreateHud(GameManager gameManager, ShooterController shooter)
+        private sealed class HudReferences
+        {
+            public TrackingStatusHud StatusHud;
+        }
+
+        private static HudReferences CreateHud(GameManager gameManager, ShooterController shooter)
         {
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
@@ -403,36 +546,131 @@ namespace AIMAR.Editor
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            Text score = CreateText(canvas.transform, "ScoreText", "Puntaje: 0", font, 42, TextAnchor.MiddleLeft);
-            SetRect(score.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -35f), new Vector2(390f, 85f));
+            // Banda oscura detrás del marcador y el tiempo: sin ella el texto
+            // blanco se pierde sobre el video de la cámara.
+            CreateTopBar(canvas.transform, 230f, new Color(0f, 0f, 0f, 0.55f));
 
-            Text time = CreateText(canvas.transform, "TimeText", "Tiempo: 30", font, 42, TextAnchor.MiddleRight);
-            SetRect(time.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-40f, -35f), new Vector2(390f, 85f));
+            Text score = CreateText(canvas.transform, "ScoreText", "Puntaje: 0", font, 46, TextAnchor.MiddleLeft);
+            SetRect(score.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -35f), new Vector2(430f, 85f));
+
+            Text time = CreateText(canvas.transform, "TimeText", "Tiempo: 30", font, 46, TextAnchor.MiddleRight);
+            SetRect(time.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-40f, -35f), new Vector2(430f, 85f));
+
+            Text status = CreateText(canvas.transform, "StatusText", "Buscando marcador", font, 34, TextAnchor.MiddleCenter);
+            status.color = new Color(1f, 0.78f, 0.24f, 1f);
+            SetRect(status.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -130f), new Vector2(700f, 60f));
 
             Text instruction = CreateText(canvas.transform, "InstructionText", "Apunta con la retícula y presiona FUEGO", font, 30, TextAnchor.MiddleCenter);
-            SetRect(instruction.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -130f), new Vector2(850f, 70f));
+            SetRect(instruction.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -190f), new Vector2(900f, 60f));
 
             CreateCrosshair(canvas.transform);
+
             Button fireButton = CreateFireButton(canvas.transform, font);
             UnityEventTools.AddPersistentListener(fireButton.onClick, shooter.Shoot);
 
-            gameManager.ConfigureHud(score, time);
+            GameObject finalPanel = CreateFinalPanel(canvas.transform, font, gameManager, out Text finalText);
+
+            gameManager.ConfigureHud(score, time, finalPanel, finalText);
+
+            TrackingStatusHud statusHud = canvasObject.AddComponent<TrackingStatusHud>();
+            statusHud.Configure(status);
 
             GameObject eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
             eventSystem.transform.SetAsLastSibling();
+
+            return new HudReferences { StatusHud = statusHud };
+        }
+
+        private static GameObject CreateFinalPanel(Transform parent, Font font, GameManager gameManager, out Text finalText)
+        {
+            GameObject panel = new GameObject("FinalPanel", typeof(RectTransform), typeof(UIImage));
+            panel.transform.SetParent(parent, false);
+            UIImage backdrop = panel.GetComponent<UIImage>();
+            backdrop.color = new Color(0f, 0f, 0f, 0.78f);
+            backdrop.raycastTarget = true; // bloquea el botón FUEGO al terminar
+            StretchFull(panel.GetComponent<RectTransform>());
+
+            GameObject card = new GameObject("Card", typeof(RectTransform), typeof(UIImage));
+            card.transform.SetParent(panel.transform, false);
+            card.GetComponent<UIImage>().color = new Color(0.06f, 0.14f, 0.22f, 0.97f);
+            RectTransform cardRect = card.GetComponent<RectTransform>();
+            cardRect.anchorMin = new Vector2(0.5f, 0.5f);
+            cardRect.anchorMax = new Vector2(0.5f, 0.5f);
+            cardRect.pivot = new Vector2(0.5f, 0.5f);
+            cardRect.anchoredPosition = Vector2.zero;
+            cardRect.sizeDelta = new Vector2(820f, 620f);
+
+            finalText = CreateText(card.transform, "FinalText", "SESIÓN TERMINADA", font, 46, TextAnchor.MiddleCenter);
+            RectTransform finalRect = finalText.rectTransform;
+            finalRect.anchorMin = new Vector2(0.5f, 1f);
+            finalRect.anchorMax = new Vector2(0.5f, 1f);
+            finalRect.pivot = new Vector2(0.5f, 1f);
+            finalRect.anchoredPosition = new Vector2(0f, -60f);
+            finalRect.sizeDelta = new Vector2(720f, 340f);
+
+            GameObject restartObject = new GameObject("RestartButton", typeof(RectTransform), typeof(UIImage), typeof(Button));
+            restartObject.transform.SetParent(card.transform, false);
+            restartObject.GetComponent<UIImage>().color = new Color(0.12f, 0.62f, 0.30f, 0.98f);
+            RectTransform restartRect = restartObject.GetComponent<RectTransform>();
+            restartRect.anchorMin = new Vector2(0.5f, 0f);
+            restartRect.anchorMax = new Vector2(0.5f, 0f);
+            restartRect.pivot = new Vector2(0.5f, 0f);
+            restartRect.anchoredPosition = new Vector2(0f, 60f);
+            restartRect.sizeDelta = new Vector2(420f, 140f);
+
+            Text restartLabel = CreateText(restartObject.transform, "Label", "REINICIAR", font, 44, TextAnchor.MiddleCenter);
+            StretchFull(restartLabel.rectTransform);
+
+            UnityEventTools.AddPersistentListener(restartObject.GetComponent<Button>().onClick, gameManager.ResetSession);
+
+            panel.SetActive(false);
+            return panel;
+        }
+
+        private static void CreateTopBar(Transform parent, float height, Color color)
+        {
+            GameObject bar = new GameObject("TopBar", typeof(RectTransform), typeof(UIImage));
+            bar.transform.SetParent(parent, false);
+            UIImage image = bar.GetComponent<UIImage>();
+            image.color = color;
+            image.raycastTarget = false;
+
+            RectTransform rect = bar.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(0f, height);
+        }
+
+        private static void StretchFull(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
         }
 
         private static Text CreateText(Transform parent, string name, string value, Font font, int size, TextAnchor alignment)
         {
-            GameObject textObject = new GameObject(name, typeof(RectTransform), typeof(Text));
+            GameObject textObject = new GameObject(name, typeof(RectTransform), typeof(Text), typeof(Outline));
             textObject.transform.SetParent(parent, false);
+
             Text text = textObject.GetComponent<Text>();
             text.text = value;
             text.font = font;
             text.fontSize = size;
             text.color = Color.white;
             text.alignment = alignment;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
+
+            Outline outline = textObject.GetComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            outline.effectDistance = new Vector2(2.5f, -2.5f);
+
             return text;
         }
 
@@ -461,11 +699,7 @@ namespace AIMAR.Editor
             SetRect(buttonObject.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-55f, 55f), new Vector2(300f, 150f));
 
             Text label = CreateText(buttonObject.transform, "Label", "FUEGO", font, 48, TextAnchor.MiddleCenter);
-            RectTransform labelRect = label.rectTransform;
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
+            StretchFull(label.rectTransform);
 
             return buttonObject.GetComponent<Button>();
         }
@@ -477,6 +711,50 @@ namespace AIMAR.Editor
             rect.pivot = new Vector2(anchorMax.x, anchorMax.y);
             rect.anchoredPosition = anchoredPosition;
             rect.sizeDelta = size;
+        }
+
+        /// <summary>
+        /// Conecta el texto de estado a los eventos del observador de Vuforia.
+        /// Usa reflexión a propósito: si la versión instalada renombra esos
+        /// campos, el builder sigue compilando y solo se pierde el aviso.
+        /// </summary>
+        private static void WireTrackingStatus(ImageTargetBehaviour imageTarget, TrackingStatusHud statusHud)
+        {
+            DefaultObserverEventHandler handler = imageTarget.GetComponent<DefaultObserverEventHandler>();
+            if (handler == null)
+            {
+                Debug.LogWarning("AIM-AR: el ImageTarget no tiene DefaultObserverEventHandler. El texto de estado quedará fijo en 'Buscando marcador'.");
+                return;
+            }
+
+            bool found = TryBindEvent(handler, "OnTargetFound", statusHud.ShowTracked);
+            bool lost = TryBindEvent(handler, "OnTargetLost", statusHud.ShowSearching);
+
+            if (found && lost)
+            {
+                EditorUtility.SetDirty(handler);
+                return;
+            }
+
+            Debug.LogWarning("AIM-AR: no se pudieron conectar OnTargetFound/OnTargetLost en esta versión de Vuforia. El texto de estado quedará fijo; no afecta al resto del prototipo.");
+        }
+
+        private static bool TryBindEvent(Component handler, string fieldName, UnityAction callback)
+        {
+            FieldInfo field = handler.GetType().GetField(fieldName, BindingFlags.Public | BindingFlags.Instance);
+            UnityEvent unityEvent = field?.GetValue(handler) as UnityEvent;
+            if (unityEvent == null)
+            {
+                return false;
+            }
+
+            for (int i = unityEvent.GetPersistentEventCount() - 1; i >= 0; i--)
+            {
+                UnityEventTools.RemovePersistentListener(unityEvent, i);
+            }
+
+            UnityEventTools.AddPersistentListener(unityEvent, callback);
+            return true;
         }
 
         private static void AddSceneToBuildSettings()
