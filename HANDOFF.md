@@ -210,6 +210,35 @@ permisos y guardar copia local.
 
 ---
 
+## 5 bis. Probar en el celular
+
+Puede servir como **vía de diagnóstico del problema del marcador**: si los targets INSTANT
+solo operan en dispositivo y no en Play Mode con webcam, la build al celular lo desbloquea.
+Además la cámara del teléfono tiene autofoco, muy superior a una webcam de portátil.
+
+**Falta instalar Android Build Support.** El editor solo trae WebGL y Windows Standalone.
+Desde Unity Hub → *Installs* → los tres puntos de `6000.5.1f1` → *Add modules*, marcando
+**Android Build Support** junto con OpenJDK, Android SDK y NDK. Son unos 2 GB.
+iOS no es opción sin una Mac con Xcode.
+
+Los ajustes de reproductor ya están preparados:
+
+| Ajuste | Valor | Por qué |
+|---|---|---|
+| `applicationIdentifier` | `com.aimar.entrenamiento` | Traía el de la plantilla URP (`com.unity.template.*`), que Unity rechaza al construir |
+| Orientación | Vertical fija | El HUD está diseñado a 1080×1920; rotar en AR además reinicia la vista |
+| Scripting backend | IL2CPP | Requerido para ARM64 |
+| Arquitectura | ARM64 | |
+| `minSdk` | 26 | Por encima del mínimo de Vuforia |
+
+Después: `File > Build Profiles`, cambiar a Android —la primera reimportación con Vuforia
+tarda—, conectar el teléfono con depuración USB y usar *Build and Run*. El permiso de cámara
+lo agrega Vuforia al manifiesto y Android lo pide al abrir.
+
+> **La APK no es el entregable de esta entrega.** El plan la posterga expresamente y exige
+> que el video se grabe en modo Play desde Unity. La build al celular es herramienta de
+> prueba y diagnóstico, no cambia el guion del video.
+
 ## 6. Cosas del repositorio que conviene saber
 
 - **`Assets/TutorialInfo/Icons/URP.png` aparece siempre como modificado.** No es un cambio
