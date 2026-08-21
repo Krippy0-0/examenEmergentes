@@ -23,6 +23,7 @@ namespace AIMAR
 
         private Vector3 basePosition;
         private float elapsed;
+        private float speedMultiplier = 1f;
 
         public Vector3 BasePosition => basePosition;
 
@@ -38,15 +39,15 @@ namespace AIMAR
 
             if (!Mathf.Approximately(rotationSpeed, 0f))
             {
-                transform.Rotate(Vector3.up, rotationSpeed * Time.deltaTime, Space.Self);
+                transform.Rotate(Vector3.up, rotationSpeed * speedMultiplier * Time.deltaTime, Space.Self);
             }
 
             Vector3 axis = floatAxis.sqrMagnitude > 0.0001f ? floatAxis.normalized : Vector3.forward;
-            Vector3 offset = axis * (Mathf.Sin(elapsed * floatSpeed) * floatAmplitude);
+            Vector3 offset = axis * (Mathf.Sin(elapsed * floatSpeed * speedMultiplier) * floatAmplitude);
 
             if (orbitRadius > 0f)
             {
-                float angle = elapsed * orbitSpeed;
+                float angle = elapsed * orbitSpeed * speedMultiplier;
                 offset.x = Mathf.Cos(angle) * orbitRadius;
                 offset.z = Mathf.Sin(angle) * orbitRadius;
             }
@@ -61,6 +62,11 @@ namespace AIMAR
         public void SetBasePosition(Vector3 localPosition)
         {
             basePosition = localPosition;
+        }
+
+        public void SetSpeedMultiplier(float multiplier)
+        {
+            speedMultiplier = Mathf.Max(0.1f, multiplier);
         }
 
         public void Configure(

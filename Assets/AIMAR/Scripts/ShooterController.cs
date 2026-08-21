@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace AIMAR
@@ -24,7 +25,9 @@ namespace AIMAR
             }
 
             Ray ray = new Ray(arCamera.transform.position, arCamera.transform.forward);
-            if (Physics.Raycast(ray, out RaycastHit hit, maxDistance, targetLayer))
+            RaycastHit[] hits = Physics.RaycastAll(ray, maxDistance, targetLayer, QueryTriggerInteraction.Ignore);
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+            foreach (RaycastHit hit in hits)
             {
                 Target target = hit.collider.GetComponentInParent<Target>();
                 if (target != null && target.ReceiveHit(hit.point))
